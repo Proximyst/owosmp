@@ -38,7 +38,7 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
       (config.systemPrompt ?: config.prompt)?.trim()?.ifEmpty { null } ?: DEFAULT_SYSTEM_PROMPT
 
   private val triggers: Map<String, String> = buildMap {
-    put("ai", config.model)
+    put(DEFAULT_TRIGGER, DEFAULT_MODEL)
     val configured = config.triggers.orEmpty()
     require(configured.keys.all { it.isNotBlank() }) {
       "llm.triggers must not contain blank triggers"
@@ -285,6 +285,9 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
   }
 
   companion object {
+    const val DEFAULT_TRIGGER = "ai"
+    const val DEFAULT_MODEL = "mistralai/mistral-nemo"
+
     private fun formatCost(amount: BigDecimal): String {
       val scaled = if (amount.scale() > 8) amount.setScale(8, RoundingMode.HALF_UP) else amount
       val plain = scaled.stripTrailingZeros().toPlainString()

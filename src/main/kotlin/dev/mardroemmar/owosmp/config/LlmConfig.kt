@@ -5,12 +5,11 @@ import com.google.gson.JsonElement
 data class LlmConfig(
     val endpoint: String = "https://openrouter.ai/api/v1/chat/completions",
     val bearerToken: String? = null,
-    val model: String = "mistralai/mistral-nemo",
     /** Minecraft Component JSON. Null uses "<AI> " with AI coloured #4A6C6F. */
     val prefix: JsonElement? = null,
     /**
-     * Trigger name to model ID, e.g. "mimo". Matches a following space, colon or comma. Overrides
-     * "ai".
+     * Trigger name to model ID, e.g. "ai": "mistralai/mistral-nemo" or "mimo": "xiaomi/...".
+     * Matches a following space, colon or comma. Defaults to "ai" -> "mistralai/mistral-nemo".
      */
     val triggers: Map<String, String>? = null,
     /** Retained user/reply pairs. Omitted or null uses 40; zero disables history. */
