@@ -37,27 +37,13 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
   private val systemPrompt: String =
       (config.systemPrompt ?: config.prompt)?.trim()?.ifEmpty { null } ?: DEFAULT_SYSTEM_PROMPT
 
-  private val triggers: Map<String, String> = buildMap {
-    put(DEFAULT_TRIGGER, DEFAULT_MODEL)
-    val configured = config.triggers.orEmpty()
-    require(configured.keys.all { it.isNotBlank() }) {
-      "llm.triggers must not contain blank triggers"
-    }
-    require(configured.keys.all { it == it.trim() && !it.endsWith(':') && !it.endsWith(',') }) {
-      "llm.triggers keys must be names without surrounding whitespace or trailing colons/commas"
-    }
-    require(configured.values.all { it.isNotBlank() }) {
-      "llm.triggers must not contain blank model IDs"
-    }
-    val normalized = configured.keys.map { it.lowercase(Locale.ROOT) }
-    require(normalized.distinct().size == normalized.size) {
-      "llm.triggers must not contain duplicate case-insensitive triggers"
-    }
-    configured.forEach { (trigger, model) -> put(trigger.lowercase(Locale.ROOT), model) }
+  @Volatile
+  var triggers: Map<String, String> = compileTriggers(config.triggers)
+    private set
+
+  fun updateTriggers(newTriggers: Map<String, String>) {
+    triggers = compileTriggers(newTriggers)
   }
-      .toList()
-      .sortedByDescending { it.first.length }
-      .toMap()
 
   private val prefix: Component =
       config.prefix?.let {
@@ -288,7 +274,36 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
     const val DEFAULT_TRIGGER = "ai"
     const val DEFAULT_MODEL = "mistralai/mistral-nemo"
 
-    private fun formatCost(amount: BigDecimal): String {
+    fun compileTriggers(configured: Map<String, String>?): Map<String, String> = buildMap {
+      val map = configured ?: mapOf(DEFAULT_TRIGGER to DEFAULT_MODEL)
+      require(map.isNotEmpty()) { "AI triggers must not be empty" }
+      require(map.keys.all { it.isNotBlank() }) {
+        "AI triggers must not contain blank triggers"
+      }
+      require(
+          map.keys.all {
+            it == it.trim() &&
+                !it.endsWith(':') &&
+                !it.endsWith(',') &&
+                !it.any { ch -> ch.isWhitespace() }
+          }
+      ) {
+        "AI trigger keys must be names without whitespace or colons/commas"
+      }
+      require(map.values.all { it.isNotBlank() }) {
+        "AI triggers must not contain blank model IDs"
+      }
+      val normalized = map.keys.map { it.lowercase(Locale.ROOT) }
+      require(normalized.distinct().size == normalized.size) {
+        "AI triggers must not contain duplicate case-insensitive triggers"
+      }
+      map.forEach { (trigger, model) -> put(trigger.lowercase(Locale.ROOT), model.trim()) }
+    }
+        .toList()
+        .sortedByDescending { it.first.length }
+        .toMap()
+
+    fun formatCost(amount: BigDecimal): String {
       val scaled = if (amount.scale() > 8) amount.setScale(8, RoundingMode.HALF_UP) else amount
       val plain = scaled.stripTrailingZeros().toPlainString()
       return if (plain.contains('.')) plain else "$plain.00"
@@ -333,7 +348,7 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
       return runCatching { message.signedContent() }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
-    private fun baseUrl(endpoint: String): String =
+    fun baseUrl(endpoint: String): String =
         endpoint.trim().trimEnd('/').removeSuffix("/chat/completions")
 
     private fun chunk(text: String, limit: Int = 220): List<String> {

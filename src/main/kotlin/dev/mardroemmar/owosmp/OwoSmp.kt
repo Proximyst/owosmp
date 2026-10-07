@@ -12,15 +12,14 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 class OwoSmp : ModInitializer {
-  @Volatile
-  private var session: LlmSession? = null
+  @Volatile private var session: LlmSession? = null
 
   override fun onInitialize() {
     GameRules.load()
     ConfigReader.load()
     session = createSession(ConfigReader.config)
     setupLlm()
-    val commands = AiCommands({ session?.clearHistory() }, ::reloadLlm)
+    val commands = AiCommands({ session?.clearHistory() }, ::reloadLlm) { session }
     CommandRegistrationCallback.EVENT.register { dispatcher, _, _ -> commands.register(dispatcher) }
     ServerLifecycleEvents.SERVER_STOPPING.register {
       session?.close()
@@ -37,10 +36,10 @@ class OwoSmp : ModInitializer {
     }
 
     val session =
-      LlmSession(llm) { player ->
-        val banned = ConfigReader.config.aiBannedPlayers.orEmpty()
-        banned.isEmpty() || (player != null && player !in banned)
-      }
+        LlmSession(llm) { player ->
+          val banned = ConfigReader.config.aiBannedPlayers.orEmpty()
+          banned.isEmpty() || (player != null && player !in banned)
+        }
     LOGGER.info("LLM chat session ready")
     return session
   }
