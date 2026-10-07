@@ -5,6 +5,7 @@ import com.mojang.serialization.JsonOps
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.core.JsonNumber
+import com.openai.models.ReasoningEffort
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import dev.mardroemmar.owosmp.GameRules
 import dev.mardroemmar.owosmp.OwoSmp
@@ -30,12 +31,12 @@ import net.minecraft.server.level.ServerPlayer
  */
 class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { true }) {
   private val maxTurns =
-      (config.maxTurns ?: 40).also {
-        require(it >= 0) { "llm.maxTurns must be non-negative" }
-      }
+    (config.maxTurns ?: 40).also {
+      require(it >= 0) { "llm.maxTurns must be non-negative" }
+    }
 
   private val systemPrompt: String =
-      (config.systemPrompt ?: config.prompt)?.trim()?.ifEmpty { null } ?: DEFAULT_SYSTEM_PROMPT
+    (config.systemPrompt ?: config.prompt)?.trim()?.ifEmpty { null } ?: DEFAULT_SYSTEM_PROMPT
 
   @Volatile
   var triggers: Map<String, String> = compileTriggers(config.triggers)
@@ -46,27 +47,29 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
   }
 
   private val prefix: Component =
-      config.prefix?.let {
-        ComponentSerialization.CODEC.parse(JsonOps.INSTANCE, it).getOrThrow { error ->
-          JsonParseException("Invalid llm.prefix: $error")
-        }
+    config.prefix?.let {
+      ComponentSerialization.CODEC.parse(JsonOps.INSTANCE, it).getOrThrow { error ->
+        JsonParseException("Invalid llm.prefix: $error")
       }
-          ?: Component.empty()
-              .append(Component.literal("<"))
-              .append(
-                  Component.literal("AI").withStyle { it.withColor(TextColor.fromRgb(0x4A6C6F)) }
-              )
-              .append(Component.literal("> "))
+    }
+      ?: Component.empty()
+        .append(Component.literal("<"))
+        .append(
+          Component.literal("AI").withStyle { it.withColor(TextColor.fromRgb(0x4A6C6F)) }
+        )
+        .append(Component.literal("> "))
 
   private val client: OpenAIClient =
-      OpenAIOkHttpClient.builder()
-          .apiKey(config.bearerToken)
-          .baseUrl(baseUrl(config.endpoint))
-          .build()
+    OpenAIOkHttpClient.builder()
+      .apiKey(config.bearerToken)
+      .baseUrl(baseUrl(config.endpoint))
+      .build()
 
   private val history = AtomicReference(CopyOnWriteArrayList<Turn>())
   private val pricing = ModelPricing()
-  @Volatile private var closed = false
+
+  @Volatile
+  private var closed = false
   private val executor = Executors.newSingleThreadExecutor { runnable ->
     Thread(runnable, "owosmp-llm").apply { isDaemon = true }
   }
@@ -118,16 +121,16 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
   private fun promptFrom(raw: String?): Prompt? {
     val text = raw?.trim().orEmpty()
     val trigger =
-        triggers.entries.firstOrNull {
-          text.startsWith(it.key, ignoreCase = true) &&
-              text.getOrNull(it.key.length)?.let { separator ->
-                separator.isWhitespace() || separator == ':' || separator == ','
-              } == true
-        } ?: return null
+      triggers.entries.firstOrNull {
+        text.startsWith(it.key, ignoreCase = true) &&
+            text.getOrNull(it.key.length)?.let { separator ->
+              separator.isWhitespace() || separator == ':' || separator == ','
+            } == true
+      } ?: return null
     val prompt =
-        text.substring(trigger.key.length + 1).trim().ifEmpty {
-          return null
-        }
+      text.substring(trigger.key.length + 1).trim().ifEmpty {
+        return null
+      }
     return Prompt(prompt, trigger.value)
   }
 
@@ -135,34 +138,34 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
     val turns = history.get()
     executor.execute {
       if (
-          closed ||
-              history.get() !== turns ||
-              !canUse(sender) ||
-              server.gameRules.get(GameRules.disableLlm)
+        closed ||
+        history.get() !== turns ||
+        !canUse(sender) ||
+        server.gameRules.get(GameRules.disableLlm)
       ) {
         return@execute
       }
       val started = System.nanoTime()
       val reply =
-          try {
-            complete(speaker, prompt, turns)
-          } catch (e: Exception) {
-            if (closed || history.get() !== turns) return@execute
-            OwoSmp.LOGGER.error("LLM request failed", e)
-            Reply(
-                "I couldn't answer that just now.",
-                Component.literal(
-                    "Cost: unavailable\nTokens: unavailable\n" +
-                        "Requested model: ${prompt.model}\nLatency: ${(System.nanoTime() - started) / 1_000_000} ms\nRequest failed"
-                ),
-            )
-          }
+        try {
+          complete(speaker, prompt, turns)
+        } catch (e: Exception) {
+          if (closed || history.get() !== turns) return@execute
+          OwoSmp.LOGGER.error("LLM request failed", e)
+          Reply(
+            "I couldn't answer that just now.",
+            Component.literal(
+              "Cost: unavailable\nTokens: unavailable\n" +
+                  "Requested model: ${prompt.model}\nLatency: ${(System.nanoTime() - started) / 1_000_000} ms\nRequest failed"
+            ),
+          )
+        }
       server.execute {
         if (
-            !closed &&
-                history.get() === turns &&
-                canUse(sender) &&
-                !server.gameRules.get(GameRules.disableLlm)
+          !closed &&
+          history.get() === turns &&
+          canUse(sender) &&
+          !server.gameRules.get(GameRules.disableLlm)
         ) {
           broadcast(server, reply)
         }
@@ -174,31 +177,38 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
     val userText = "$speaker: ${prompt.text}"
     val previousTurns = turns.toList()
     val params =
-        ChatCompletionCreateParams.builder()
-            .model(prompt.model)
-            .addSystemMessage(systemPrompt)
-            .apply {
-              previousTurns.forEach { turn ->
-                addUserMessage(turn.user)
-                addAssistantMessage(turn.assistant)
-              }
-            }
-            .addUserMessage(userText)
-            .build()
+      ChatCompletionCreateParams.builder()
+        .model(prompt.model)
+        .addSystemMessage(systemPrompt)
+        .apply {
+          previousTurns.forEach { turn ->
+            addUserMessage(turn.user)
+            addAssistantMessage(turn.assistant)
+          }
+          verbosity(ChatCompletionCreateParams.Verbosity.LOW)
+          reasoningEffort(ReasoningEffort.MINIMAL)
+        }
+        .addUserMessage(userText)
+        .build()
 
     val started = System.nanoTime()
     val completion = client.chat().completions().create(params)
     val latencyMs = (System.nanoTime() - started) / 1_000_000
+    val cleanedLines =
+      completion
+        .choices()
+        .firstOrNull()
+        ?.message()
+        ?.content()
+        ?.orElse(null)
+        .orEmpty()
+        .let { EMOJIS.replace(it, "") }
+        .lines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
     val reply =
-        completion
-            .choices()
-            .firstOrNull()
-            ?.message()
-            ?.content()
-            ?.orElse(null)
-            .orEmpty()
-            .let { EMOJIS.replace(it, "").trim() }
-            .ifBlank { "I don't have a reply for that." }
+      if (cleanedLines.isEmpty()) "I don't have a reply for that."
+      else cleanedLines.joinToString("\n")
 
     turns.add(Turn(userText, reply))
     while (turns.size > maxTurns) {
@@ -207,45 +217,45 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
     val usage = completion.usage().orElse(null)
     val cost = usage?._additionalProperties()?.get("cost")
     val inputTokens =
-        usage?.promptTokens()
-            ?: estimateTokens(
-                systemPrompt + previousTurns.joinToString("") { it.user + it.assistant } + userText
-            )
-    val outputTokens =
-        usage?.completionTokens()
-            ?: estimateTokens(
-                completion.choices().firstOrNull()?.message()?.content()?.orElse(null).orEmpty()
-            )
-    val parsedCost =
-        (cost as? JsonNumber)?.value?.let { value ->
-          runCatching {
-            when (value) {
-              is BigDecimal -> value
-              else -> BigDecimal(value.toString())
-            }
-          }
-              .getOrNull()
-        }
-    val estimatedCost =
-        if (parsedCost != null) null
-        else
-            pricing.estimate(completion.model(), inputTokens, outputTokens)
-                ?: if (completion.model() != prompt.model) {
-                  pricing.estimate(prompt.model, inputTokens, outputTokens)
-                } else null
-    val costText =
-        parsedCost?.let { "${formatCost(it)} USD" }
-            ?: estimatedCost?.let { "~${formatCost(it)} USD (estimated)" }
-            ?: "unavailable (no model pricing)"
-    val tokensText =
-        usage?.let {
-          "${it.totalTokens()} (${it.promptTokens()} input, ${it.completionTokens()} output)"
-        }
-            ?: "~${inputTokens + outputTokens} (~$inputTokens input, ~$outputTokens output; estimated)"
-    val hover =
-        Component.literal(
-            "Cost: $costText\nTokens: $tokensText\nModel: ${completion.model()}\nLatency: $latencyMs ms"
+      usage?.promptTokens()
+        ?: estimateTokens(
+          systemPrompt + previousTurns.joinToString("") { it.user + it.assistant } + userText
         )
+    val outputTokens =
+      usage?.completionTokens()
+        ?: estimateTokens(
+          completion.choices().firstOrNull()?.message()?.content()?.orElse(null).orEmpty()
+        )
+    val parsedCost =
+      (cost as? JsonNumber)?.value?.let { value ->
+        runCatching {
+          when (value) {
+            is BigDecimal -> value
+            else -> BigDecimal(value.toString())
+          }
+        }
+          .getOrNull()
+      }
+    val estimatedCost =
+      if (parsedCost != null) null
+      else
+        pricing.estimate(completion.model(), inputTokens, outputTokens)
+          ?: if (completion.model() != prompt.model) {
+            pricing.estimate(prompt.model, inputTokens, outputTokens)
+          } else null
+    val costText =
+      parsedCost?.let { "${formatCost(it)} USD" }
+        ?: estimatedCost?.let { "~${formatCost(it)} USD (estimated)" }
+        ?: "unavailable (no model pricing)"
+    val tokensText =
+      usage?.let {
+        "${it.totalTokens()} (${it.promptTokens()} input, ${it.completionTokens()} output)"
+      }
+        ?: "~${inputTokens + outputTokens} (~$inputTokens input, ~$outputTokens output; estimated)"
+    val hover =
+      Component.literal(
+        "Cost: $costText\nTokens: $tokensText\nModel: ${completion.model()}\nLatency: $latencyMs ms"
+      )
     return Reply(reply, hover)
   }
 
@@ -256,16 +266,18 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
   private data class Reply(val text: String, val hover: Component)
 
   private fun broadcast(server: MinecraftServer, reply: Reply) {
-    for (chunk in chunk(reply.text)) {
+    val messages =
+      reply.text.lines().map { it.trim() }.filter { it.isNotEmpty() }.flatMap { chunk(it) }
+    for (chunk in messages) {
       val message =
-          Component.empty()
-              .append(prefix)
-              .append(
-                  Component.literal(chunk).withStyle {
-                    it.withHoverEvent(HoverEvent.ShowText(reply.hover))
-                  }
-              )
-              .withStyle { it.withHoverEvent(HoverEvent.ShowText(reply.hover)) }
+        Component.empty()
+          .append(prefix)
+          .append(
+            Component.literal(chunk).withStyle {
+              it.withHoverEvent(HoverEvent.ShowText(reply.hover))
+            }
+          )
+          .withStyle { it.withHoverEvent(HoverEvent.ShowText(reply.hover)) }
       server.playerList.broadcastSystemMessage(message, false)
     }
   }
@@ -281,12 +293,12 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
         "AI triggers must not contain blank triggers"
       }
       require(
-          map.keys.all {
-            it == it.trim() &&
-                !it.endsWith(':') &&
-                !it.endsWith(',') &&
-                !it.any { ch -> ch.isWhitespace() }
-          }
+        map.keys.all {
+          it == it.trim() &&
+              !it.endsWith(':') &&
+              !it.endsWith(',') &&
+              !it.any { ch -> ch.isWhitespace() }
+        }
       ) {
         "AI trigger keys must be names without whitespace or colons/commas"
       }
@@ -299,9 +311,9 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
       }
       map.forEach { (trigger, model) -> put(trigger.lowercase(Locale.ROOT), model.trim()) }
     }
-        .toList()
-        .sortedByDescending { it.first.length }
-        .toMap()
+      .toList()
+      .sortedByDescending { it.first.length }
+      .toMap()
 
     fun formatCost(amount: BigDecimal): String {
       val scaled = if (amount.scale() > 8) amount.setScale(8, RoundingMode.HALF_UP) else amount
@@ -310,10 +322,10 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
     }
 
     private fun estimateTokens(text: String): Long =
-        (text.codePointCount(0, text.length).toLong() + 3) / 4
+      (text.codePointCount(0, text.length).toLong() + 3) / 4
 
     private const val DEFAULT_SYSTEM_PROMPT =
-        """
+      """
         You are a chatter in a Minecraft SMP chat. Write largely in lower-case, like a Minecraft player would.
         You're interacting with adults, all 18+. Do not censor your language.
         Join in on playful banter and roleplay. You are not a moderator or admin.
@@ -322,15 +334,16 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
         Respect anyone who declines flirting or asks you to stop.
         You prefer to say 'shalom' to greet people.
         Do not use markdown, do not use emojis.
+        Avoid newlines; keep messages on a single line like Minecraft chat.
       """
 
     private val PLAYER_CHAT_PREFIX = Regex("""^<([^>]{1,64})>\s+""")
 
     // Keep plain digits, # and *; remove keycaps and emoji sequence formatting with the emoji.
     private val EMOJIS =
-        Regex(
-            """[#*0-9]\uFE0F?\u20E3|\u200D?[\p{IsEmoji}&&[^#*0-9]][\uFE0E\uFE0F\x{E0020}-\x{E007F}]*"""
-        )
+      Regex(
+        """[#*0-9]\uFE0F?\u20E3|\u200D?[\p{IsEmoji}&&[^#*0-9]][\uFE0E\uFE0F\x{E0020}-\x{E007F}]*"""
+      )
 
     /**
      * Prefer unsigned content. NoChatReports often nulls the signature and sometimes the signed
@@ -349,7 +362,7 @@ class LlmSession(config: LlmConfig, private val canUse: (UUID?) -> Boolean = { t
     }
 
     fun baseUrl(endpoint: String): String =
-        endpoint.trim().trimEnd('/').removeSuffix("/chat/completions")
+      endpoint.trim().trimEnd('/').removeSuffix("/chat/completions")
 
     private fun chunk(text: String, limit: Int = 220): List<String> {
       if (text.length <= limit) {
