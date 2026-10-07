@@ -1,3 +1,6 @@
+import java.nio.charset.StandardCharsets
+import java.util.UUID
+
 plugins {
   kotlin("jvm") version "2.4.20"
   // id("com.gradleup.shadow") version "9.6.1"
@@ -9,12 +12,23 @@ repositories {
   mavenCentral()
 }
 
+val devPlayerName = "Player"
+val devPlayerUuid =
+  UUID.nameUUIDFromBytes("OfflinePlayer:$devPlayerName".toByteArray(StandardCharsets.UTF_8))
+    .toString()
+
 loom {
   splitEnvironmentSourceSets()
 
   mods {
     create("owosmp") {
       sourceSet(sourceSets.main.get())
+    }
+  }
+
+  runs {
+    named("client") {
+      programArguments.addAll("--username", devPlayerName)
     }
   }
 }
@@ -56,6 +70,107 @@ kotlin {
 tasks.jar {
   inputs.property("projectName", rootProject.name)
 }
+
+abstract class PrepareServerRunTask : DefaultTask() {
+  @get:Input
+  abstract val playerName: Property<String>
+
+  @get:Input
+  abstract val playerUuid: Property<String>
+
+  @get:Internal
+  abstract val runDir: DirectoryProperty
+
+  @TaskAction
+  fun prepare() {
+    val dir = runDir.get().asFile
+    dir.mkdirs()
+
+    val name = playerName.get()
+    val uuid = playerUuid.get()
+
+    // 1. Agree to EULA
+    dir.resolve("eula.txt").writeText("eula=true\n")
+
+    // 2. Disable online-mode and ensure whitelist in server.properties
+    val propsFile = dir.resolve("server.properties")
+    if (propsFile.exists()) {
+      var content = propsFile.readText()
+      content =
+        if (content.contains("online-mode=")) {
+          content.replace(Regex("""online-mode=.*"""), "online-mode=false")
+        } else {
+          "$content\nonline-mode=false\n"
+        }
+      propsFile.writeText(content)
+    } else {
+      propsFile.writeText("online-mode=false\nwhite-list=true\n")
+    }
+
+    // 3. Auto-op dev player
+    val opsFile = dir.resolve("ops.json")
+    val opsJson =
+      if (opsFile.exists() && opsFile.readText().isNotBlank()) {
+        com.google.gson.JsonParser.parseString(opsFile.readText()).asJsonArray
+      } else {
+        com.google.gson.JsonArray()
+      }
+    val opEntry =
+      opsJson
+        .mapNotNull { if (it.isJsonObject) it.asJsonObject else null }
+        .firstOrNull { it.get("name")?.asString.equals(name, ignoreCase = true) }
+    if (opEntry != null) {
+      opEntry.addProperty("uuid", uuid)
+      opEntry.addProperty("level", 4)
+    } else {
+      val entry =
+        com.google.gson.JsonObject().apply {
+          addProperty("uuid", uuid)
+          addProperty("name", name)
+          addProperty("level", 4)
+          addProperty("bypassesPlayerLimit", false)
+        }
+      opsJson.add(entry)
+    }
+    opsFile.writeText(com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(opsJson))
+
+    // 4. Auto-whitelist dev player
+    val whitelistFile = dir.resolve("whitelist.json")
+    val whitelistJson =
+      if (whitelistFile.exists() && whitelistFile.readText().isNotBlank()) {
+        com.google.gson.JsonParser.parseString(whitelistFile.readText()).asJsonArray
+      } else {
+        com.google.gson.JsonArray()
+      }
+    val wlEntry =
+      whitelistJson
+        .mapNotNull { if (it.isJsonObject) it.asJsonObject else null }
+        .firstOrNull { it.get("name")?.asString.equals(name, ignoreCase = true) }
+    if (wlEntry != null) {
+      wlEntry.addProperty("uuid", uuid)
+    } else {
+      val entry =
+        com.google.gson.JsonObject().apply {
+          addProperty("uuid", uuid)
+          addProperty("name", name)
+        }
+      whitelistJson.add(entry)
+    }
+    whitelistFile.writeText(
+      com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(whitelistJson)
+    )
+  }
+}
+
+val prepareServerRun =
+  tasks.register<PrepareServerRunTask>("prepareServerRun") {
+    playerName.set(devPlayerName)
+    playerUuid.set(devPlayerUuid)
+    runDir.set(layout.projectDirectory.dir("run"))
+    outputs.upToDateWhen { false }
+  }
+
+tasks.named("runServer") { dependsOn(prepareServerRun) }
 
 spotless {
   java {
