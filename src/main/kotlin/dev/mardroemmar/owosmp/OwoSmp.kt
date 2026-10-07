@@ -20,7 +20,10 @@ class OwoSmp : ModInitializer {
     session = createSession(ConfigReader.config)
     setupLlm()
     val commands = AiCommands({ session?.clearHistory() }, ::reloadLlm) { session }
-    CommandRegistrationCallback.EVENT.register { dispatcher, _, _ -> commands.register(dispatcher) }
+    CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
+      commands.register(dispatcher)
+      OwoCommands.register(dispatcher, ::reload)
+    }
     ServerLifecycleEvents.SERVER_STOPPING.register {
       session?.close()
       session = null
@@ -42,6 +45,10 @@ class OwoSmp : ModInitializer {
         }
     LOGGER.info("LLM chat session ready")
     return session
+  }
+
+  fun reload() {
+    reloadLlm()
   }
 
   private fun reloadLlm() {
