@@ -1,9 +1,10 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 plugins {
   kotlin("jvm") version "2.4.20"
-  // id("com.gradleup.shadow") version "9.6.1"
+  id("com.gradleup.shadow") version "9.6.1"
   id("net.fabricmc.fabric-loom") version "1.18-SNAPSHOT"
   id("com.diffplug.spotless") version "8.10.3"
 }
@@ -11,6 +12,9 @@ plugins {
 repositories {
   mavenCentral()
 }
+
+val shadow = configurations.getByName("shadow")
+configurations.implementation.get().extendsFrom(shadow)
 
 val devPlayerName = "Player"
 val devPlayerUuid =
@@ -38,8 +42,8 @@ dependencies {
   implementation("net.fabricmc:fabric-loader:0.19.5")
   implementation("net.fabricmc.fabric-api:fabric-api:0.161.0+26.3")
 
-  implementation(kotlin("stdlib"))
-  implementation("com.openai:openai-java:4.78.0")
+  add(shadow.name, kotlin("stdlib"))
+  add(shadow.name, "com.openai:openai-java:4.78.0")
 }
 
 tasks.processResources {
@@ -69,7 +73,31 @@ kotlin {
 
 tasks.jar {
   inputs.property("projectName", rootProject.name)
+  // Thin jar must not collide with the shadowed jar
+  archiveClassifier.set("thin")
 }
+
+tasks.build { dependsOn(tasks.named("shadowJar")) }
+
+val shadowJar =
+  tasks.named<ShadowJar>("shadowJar") {
+    configurations = listOf(shadow)
+    // Make the shadowed jar the deployable artifact (owosmp.jar)
+    archiveClassifier.set("")
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    mergeServiceFiles()
+    // Relocate bundled third-party packages, except Kotlin (kotlin-reflect breaks when relocated)
+    val prefix = "dev.mardroemmar.owosmp.shaded"
+    listOf(
+      "com.openai",
+      "okhttp3",
+      "okio",
+      "com.fasterxml"
+    )
+      .forEach { relocate(it, "$prefix.$it") }
+    // Minecraft already ships SLF4J; use its copy
+    exclude("org/slf4j/**")
+  }
 
 abstract class PrepareServerRunTask : DefaultTask() {
   @get:Input
