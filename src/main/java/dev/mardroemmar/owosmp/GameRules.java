@@ -19,10 +19,16 @@ import org.jetbrains.annotations.NotNull;
  */
 public class GameRules {
   private static final String MOD_ID = "owosmp";
+
   public static final GameRule<Boolean> REVERT_HOPPER_MINECARTS =
       GameRuleBuilder.forBoolean(false)
           .category(GameRuleCategory.MISC)
           .buildAndRegister(id("revert_hopper_minecarts"));
+  public static final GameRule<Boolean> REVERT_EMPTY_MINECARTS =
+      GameRuleBuilder.forBoolean(false)
+          .category(GameRuleCategory.MISC)
+          .buildAndRegister(id("revert_empty_minecarts"));
+
   public static final GameRule<Boolean> DISABLE_LLM =
       GameRuleBuilder.forBoolean(false)
           .category(GameRuleCategory.CHAT)
@@ -55,6 +61,7 @@ public class GameRules {
       GameRuleBuilder.forEnum(Verbosity.Known.LOW)
           .category(GameRuleCategory.CHAT)
           .buildAndRegister(id("llm_verbosity"));
+
   public static final GameRule<Boolean> RESPAWN_DRAGON_EGG =
       GameRuleBuilder.forBoolean(false)
           .category(GameRuleCategory.MOBS)
@@ -67,6 +74,7 @@ public class GameRules {
     // This just forces the class to load, which in turn forces the game rules to register.
   }
 
+  /** Create mod-owned identifiers for game rules. */
   private static @NotNull Identifier id(@NotNull String name) {
     return Identifier.fromNamespaceAndPath(MOD_ID, name);
   }
