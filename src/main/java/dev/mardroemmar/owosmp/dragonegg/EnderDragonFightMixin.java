@@ -1,8 +1,8 @@
-package dev.mardroemmar.owosmp.mixin.dragonegg;
+package dev.mardroemmar.owosmp.dragonegg;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.mardroemmar.owosmp.GameRules;
+import dev.mardroemmar.owosmp.gamerule.GameRules;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.dimension.end.EnderDragonFight;
 import org.jetbrains.annotations.NotNull;

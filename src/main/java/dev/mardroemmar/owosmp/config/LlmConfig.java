@@ -34,16 +34,6 @@ public interface LlmConfig {
     return Map.of("ai", "mistralai/mistral-nemo");
   }
 
-  /**
-   * The maximum number of turns to keep in the chat history of the LLM session; zero disables
-   * history.
-   */
-  @SerializedName("maxTurns")
-  @Value.Default
-  default int maxTurns() {
-    return 40;
-  }
-
   @SerializedName("completionTimeout")
   @Value.Default
   default @NotNull Duration completionTimeout() {

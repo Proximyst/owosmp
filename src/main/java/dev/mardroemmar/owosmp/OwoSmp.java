@@ -1,6 +1,7 @@
 package dev.mardroemmar.owosmp;
 
 import dev.mardroemmar.owosmp.config.ConfigHelper;
+import dev.mardroemmar.owosmp.gamerule.GameRules;
 import dev.mardroemmar.owosmp.llm.AiCommands;
 import dev.mardroemmar.owosmp.llm.LlmHandler;
 import net.fabricmc.api.ModInitializer;

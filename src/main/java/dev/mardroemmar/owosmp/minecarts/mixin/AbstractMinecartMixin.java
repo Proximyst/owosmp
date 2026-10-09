@@ -1,9 +1,9 @@
-package dev.mardroemmar.owosmp.mixin.minecarts;
+package dev.mardroemmar.owosmp.minecarts.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.mardroemmar.owosmp.GameRules;
-import dev.mardroemmar.owosmp.mixin.MinecartBehaviorProxy;
+import dev.mardroemmar.owosmp.gamerule.GameRules;
+import dev.mardroemmar.owosmp.minecarts.MinecartBehaviorProxy;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;

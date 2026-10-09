@@ -1,6 +1,6 @@
 {
   "required": true,
-  "package": "dev.mardroemmar.owosmp.mixin.dragonegg",
+  "package": "dev.mardroemmar.owosmp.dragonegg",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "EnderDragonFightMixin"

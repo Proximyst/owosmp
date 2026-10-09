@@ -1,4 +1,4 @@
-package dev.mardroemmar.owosmp.mixin;
+package dev.mardroemmar.owosmp.minecarts;
 
 import net.minecraft.server.level.ServerEntity;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;

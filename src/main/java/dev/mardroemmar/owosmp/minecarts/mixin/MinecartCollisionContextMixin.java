@@ -1,6 +1,6 @@
-package dev.mardroemmar.owosmp.mixin.minecarts;
+package dev.mardroemmar.owosmp.minecarts.mixin;
 
-import dev.mardroemmar.owosmp.GameRules;
+import dev.mardroemmar.owosmp.gamerule.GameRules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;

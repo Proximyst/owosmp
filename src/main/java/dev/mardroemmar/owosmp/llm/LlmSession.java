@@ -10,8 +10,8 @@ import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionCreateParams.Verbosity;
 import com.openai.models.completions.CompletionUsage;
-import dev.mardroemmar.owosmp.GameRules;
 import dev.mardroemmar.owosmp.config.LlmConfig;
+import dev.mardroemmar.owosmp.gamerule.GameRules;
 import java.io.Closeable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -122,7 +122,8 @@ public class LlmSession implements Closeable {
                   new ChatEvent(
                       formatChatEvent(player.getName().getString(), stripEmojis(message)),
                       ChatRole.USER),
-                  new ChatEvent(reply.text(), ChatRole.ASSISTANT)));
+                  new ChatEvent(reply.text(), ChatRole.ASSISTANT)),
+              level);
           level.getServer().execute(() -> broadcast(level, reply));
         });
   }
@@ -347,8 +348,8 @@ public class LlmSession implements Closeable {
   }
 
   /** How many messages in the chat history should be piped to the LLM's conversation? */
-  private int maxChatHistory() {
-    return this.config.maxTurns();
+  private int maxChatHistory(final @NotNull ServerLevel level) {
+    return level.getGameRules().get(GameRules.LLM_HISTORY);
   }
 
   /** The prefix to prepend to messages sent to the game chat. */
@@ -451,28 +452,14 @@ public class LlmSession implements Closeable {
    * Record a chat event in the session's history, trimming the history if it exceeds the maximum
    * number of turns. The message is stripped of emojis before being recorded.
    */
-  private void recordChatEvents(@NotNull List<@NotNull ChatEvent> events) {
-    while (!this.chatEvents.isEmpty() && this.chatEvents.size() >= maxChatHistory()) {
+  private void recordChatEvents(
+      @NotNull List<@NotNull ChatEvent> events, @NotNull ServerLevel level) {
+    while (!this.chatEvents.isEmpty() && this.chatEvents.size() >= maxChatHistory(level)) {
       this.chatEvents.removeFirst();
     }
-    if (maxChatHistory() != 0) {
+    if (maxChatHistory(level) != 0) {
       this.chatEvents.addAll(events);
     }
-  }
-
-  /**
-   * Remove the &lt;username&gt; prefix from a chat message, if present; LLMs like to roleplay this
-   * way.
-   */
-  private @NotNull String stripRoleplayPrefix(@NotNull String text) {
-    var trimmed = text.trim();
-    if (trimmed.startsWith("<")) {
-      var endIndex = trimmed.indexOf(">");
-      if (endIndex != -1) {
-        return trimmed.substring(endIndex + 1).trim();
-      }
-    }
-    return trimmed;
   }
 
   /** Convert a known reasoning effort to an API-compatible one. */
