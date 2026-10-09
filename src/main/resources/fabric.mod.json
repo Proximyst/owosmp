@@ -14,7 +14,8 @@
     "dragonegg.mixins.json",
     "minecarts.mixins.json",
     "gamerule.mixins.json",
-    "griefing.mixins.json"
+    "griefing.mixins.json",
+    "villager.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.19.5",

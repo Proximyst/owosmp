@@ -213,6 +213,10 @@ public class GameRules {
       GameRuleBuilder.forBoolean(true)
           .category(GameRuleCategory.MOBS)
           .buildAndRegister(id("players_trample_farmland_with_feather_falling"));
+  public static final GameRule<Boolean> GLOBAL_VILLAGER_CURE_REPUTATION =
+      GameRuleBuilder.forBoolean(false)
+          .category(GameRuleCategory.MISC)
+          .buildAndRegister(id("global_villager_cure_reputation"));
 
   private static final @NotNull Map<Identifier, UpdateCallback<? super Object>> updateCallbacks =
       new HashMap<>();
