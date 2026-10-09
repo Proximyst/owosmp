@@ -1,4 +1,4 @@
-package dev.mardroemmar.owosmp.mixin;
+package dev.mardroemmar.owosmp.mixin.minecarts;
 
 import dev.mardroemmar.owosmp.GameRules;
 import net.minecraft.server.level.ServerLevel;
@@ -14,8 +14,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * Modifies the new minecart behavior:
  *
- * <p>Reduces the speed for hopper minecarts when {@link GameRules#getRevertHopperMinecarts()} is
- * set to true.
+ * <p>Reduces the speed for hopper minecarts when {@link GameRules#REVERT_HOPPER_MINECARTS} is set
+ * to true.
  */
 @Mixin(NewMinecartBehavior.class)
 abstract class NewMinecartBehaviorMixin extends MinecartBehavior {
@@ -30,8 +30,7 @@ abstract class NewMinecartBehaviorMixin extends MinecartBehavior {
       at = {@At("HEAD")})
   private void getMaxSpeed(ServerLevel level, CallbackInfoReturnable<Double> cir) {
     if (this.minecart instanceof MinecartHopper) {
-      boolean shouldRevert =
-          level.getGameRules().get(GameRules.INSTANCE.getRevertHopperMinecarts());
+      boolean shouldRevert = level.getGameRules().get(GameRules.REVERT_HOPPER_MINECARTS);
       if (shouldRevert) {
         double speed = this.minecart.isInWater() ? 0.2 : 0.4;
         cir.setReturnValue(speed);

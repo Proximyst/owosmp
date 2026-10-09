@@ -11,7 +11,8 @@
     ]
   },
   "mixins": [
-    "owosmp.mixins.json"
+    "dragonegg.mixins.json",
+    "minecarts.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.19.5",
