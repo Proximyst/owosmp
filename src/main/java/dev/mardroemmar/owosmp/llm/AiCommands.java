@@ -101,15 +101,14 @@ public class AiCommands {
   }
 
   public void register(@NotNull CommandDispatcher<CommandSourceStack> dispatcher) {
-    var root =
+    dispatcher.register(
         Commands.literal("ai")
             .requires(Commands.hasPermission(Commands.LEVEL_ADMINS))
             .then(this.clear())
-            .then(this.reload());
-    root.then(this.models());
-    root.then(this.money());
-    root.then(this.bans());
-    dispatcher.register(root);
+            .then(this.reload())
+            .then(this.models())
+            .then(this.money())
+            .then(this.bans()));
   }
 
   private @NotNull LiteralArgumentBuilder<CommandSourceStack> clear() {
@@ -135,7 +134,7 @@ public class AiCommands {
               try {
                 config = ConfigHelper.reloadConfig();
               } catch (RuntimeException ex) {
-               return this.failure(source, "reload AI config", ex);
+                return this.failure(source, "reload AI config", ex);
               }
               var llm = config.llm();
               if (llm == null) {
@@ -279,8 +278,7 @@ public class AiCommands {
     return Commands.literal("bans")
         .then(this.bansList())
         .then(Commands.literal("add").then(this.bansChange(true)))
-        .then(Commands.literal("remove").then(this.bansChange(false)))
-        .then(Commands.literal("rm").then(this.bansChange(false)));
+        .then(Commands.literal("remove").then(this.bansChange(false)));
   }
 
   private @NotNull LiteralArgumentBuilder<CommandSourceStack> bansList() {
@@ -423,11 +421,12 @@ public class AiCommands {
     var message =
         Component.literal("OpenRouter API Key Status:\n")
             .append(" - Key label: " + data.label() + "\n")
-            .append(" - Credit remaining: " + formatMoney(data.limitRemaining()) + "\n")
+            .append(" - Credit remaining: " + formatMoney(data.limitRemaining()) + "\n");
     if (data.limit() != null) {
       message.append(" - Limit: " + formatMoney(data.limit()) + "\n");
     }
-    message.append(" - Usage: " + formatMoney(data.usage()) + "\n")
+    message
+        .append(" - Usage: " + formatMoney(data.usage()) + "\n")
         .append(" - Usage (monthly): " + formatMoney(data.usageMonthly()) + "\n")
         .append(" - Usage (daily): " + formatMoney(data.usageDaily()) + "\n");
     source.getServer().execute(() -> source.sendSuccess(() -> message, false));
