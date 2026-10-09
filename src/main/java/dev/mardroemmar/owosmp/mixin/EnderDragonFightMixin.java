@@ -1,0 +1,33 @@
+package dev.mardroemmar.owosmp.mixin;
+
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.mardroemmar.owosmp.GameRules;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.dimension.end.EnderDragonFight;
+import org.objectweb.asm.Opcodes;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+
+@Mixin(EnderDragonFight.class)
+abstract class EnderDragonFightMixin {
+  @Shadow private ServerLevel level;
+
+  @WrapOperation(
+      method = "setDragonKilled",
+      at =
+          @At(
+              value = "FIELD",
+              target =
+                  "Lnet/minecraft/world/level/dimension/end/EnderDragonFight;hasPreviouslyKilledDragon:Z",
+              opcode = Opcodes.GETFIELD))
+  public boolean shouldRespawn(EnderDragonFight instance, Operation<Boolean> original) {
+    boolean hasPreviouslyKilledDragon = original.call(instance);
+    // Note: the caller negates our answer, so we'll need to do the same.
+    boolean shouldRespawnEgg =
+        !hasPreviouslyKilledDragon
+            || level.getGameRules().get(GameRules.INSTANCE.getRespawnDragonEgg());
+    return !shouldRespawnEgg;
+  }
+}
