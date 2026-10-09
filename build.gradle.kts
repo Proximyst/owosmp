@@ -1,9 +1,8 @@
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import net.fabricmc.loom.task.RemapJarTask
 
 plugins {
-    id("com.gradleup.shadow") version "9.6.1"
     id("net.fabricmc.fabric-loom") version "1.18-SNAPSHOT"
     id("com.diffplug.spotless") version "8.10.3"
 }
@@ -11,9 +10,6 @@ plugins {
 repositories {
     mavenCentral()
 }
-
-val shadow = configurations.getByName("shadow")
-configurations.implementation.get().extendsFrom(shadow)
 
 val devPlayerName = "Player"
 val devPlayerUuid =
@@ -37,6 +33,12 @@ loom {
     }
 }
 
+val transitiveInclude = configurations.create("transitiveInclude") {
+    exclude(group = "com.mojang")
+    exclude(group = "org.jetbrains.kotlin")
+    exclude(group = "org.jetbrains.kotlinx")
+}
+
 dependencies {
     minecraft("com.mojang:minecraft:26.3")
     implementation("net.fabricmc:fabric-loader:0.19.5")
@@ -46,7 +48,11 @@ dependencies {
     compileOnly("org.immutables:value-annotations:2.12.2")
     compileOnly("org.immutables:gson:2.12.2")
 
-    add(shadow.name, "com.openai:openai-java:4.78.0")
+    transitiveInclude(implementation("com.openai:openai-java:4.78.0")!!)
+
+    transitiveInclude.resolvedConfiguration.resolvedArtifacts.forEach {
+        include(it.moduleVersion.id.toString())
+    }
 }
 
 tasks.processResources {
@@ -68,33 +74,13 @@ tasks.withType<JavaCompile> {
     options.release.set(java.sourceCompatibility.majorVersion.toInt())
 }
 
-tasks.jar {
-    inputs.property("projectName", rootProject.name)
-    // Thin jar must not collide with the shadowed jar
-    archiveClassifier.set("thin")
+tasks.withType<RemapJarTask> {
+    addNestedDependencies.set(true)
 }
 
-tasks.build { dependsOn(tasks.named("shadowJar")) }
-
-val shadowJar =
-    tasks.named<ShadowJar>("shadowJar") {
-        configurations = listOf(shadow)
-        // Make the shadowed jar the deployable artifact (owosmp.jar)
-        archiveClassifier.set("")
-        duplicatesStrategy = DuplicatesStrategy.INCLUDE
-        mergeServiceFiles()
-        // Relocate bundled third-party packages, except Kotlin (kotlin-reflect breaks when relocated)
-        val prefix = "dev.mardroemmar.owosmp.shaded"
-        listOf(
-            "com.openai",
-            "okhttp3",
-            "okio",
-            "com.fasterxml"
-        )
-            .forEach { relocate(it, "$prefix.$it") }
-        // Minecraft already ships SLF4J; use its copy
-        exclude("org/slf4j/**")
-    }
+tasks.jar {
+    inputs.property("projectName", rootProject.name)
+}
 
 abstract class PrepareServerRunTask : DefaultTask() {
     @get:Input
