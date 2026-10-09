@@ -10,10 +10,15 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 
+/**
+ * Enables respawning the dragon egg on death, when {@link GameRules#getRespawnDragonEgg()} is set
+ * to true.
+ */
 @Mixin(EnderDragonFight.class)
 abstract class EnderDragonFightMixin {
   @Shadow private ServerLevel level;
 
+  /** Decides whether the dragon egg should respawn. */
   @WrapOperation(
       method = "setDragonKilled",
       at =
@@ -22,7 +27,7 @@ abstract class EnderDragonFightMixin {
               target =
                   "Lnet/minecraft/world/level/dimension/end/EnderDragonFight;hasPreviouslyKilledDragon:Z",
               opcode = Opcodes.GETFIELD))
-  public boolean shouldRespawn(EnderDragonFight instance, Operation<Boolean> original) {
+  private boolean shouldDragonEggRespawn(EnderDragonFight instance, Operation<Boolean> original) {
     boolean hasPreviouslyKilledDragon = original.call(instance);
     // Note: the caller negates our answer, so we'll need to do the same.
     boolean shouldRespawnEgg =

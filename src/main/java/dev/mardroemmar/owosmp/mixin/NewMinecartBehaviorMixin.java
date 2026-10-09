@@ -11,12 +11,19 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/**
+ * Modifies the new minecart behavior:
+ *
+ * <p>Reduces the speed for hopper minecarts when {@link GameRules#getRevertHopperMinecarts()} is
+ * set to true.
+ */
 @Mixin(NewMinecartBehavior.class)
 abstract class NewMinecartBehaviorMixin extends MinecartBehavior {
-  protected NewMinecartBehaviorMixin(AbstractMinecart minecart) {
+  private NewMinecartBehaviorMixin(AbstractMinecart minecart) {
     super(minecart);
   }
 
+  /** Revert the hopper minecart speed when enabled. Ignores other minecarts. */
   @Inject(
       method = {"getMaxSpeed"},
       cancellable = true,
