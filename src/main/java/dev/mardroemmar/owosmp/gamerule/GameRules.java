@@ -121,7 +121,8 @@ public class GameRules {
         });
   }
 
-  @SuppressWarnings("rawtypes") // The generics are elided and quite weird with the mixin.
+  // The generics are elided and quite weird with the mixin.
+  @SuppressWarnings({"rawtypes", "unchecked"})
   private static <T> void registerUpdateCallback(
       @NotNull GameRule<T> gameRule, @NotNull UpdateCallback<T> callback) {
     updateCallbacks.put(gameRule.getIdentifier(), (UpdateCallback) callback);

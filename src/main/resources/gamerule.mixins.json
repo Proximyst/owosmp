@@ -3,6 +3,7 @@
   "package": "dev.mardroemmar.owosmp.gamerule.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+    "EnumRuleCommandMixin",
     "GameRuleCommandMixin"
   ],
   "injectors": {

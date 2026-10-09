@@ -12,8 +12,8 @@
   </Appenders>
 
   <Loggers>
-    <Logger level="DEBUG" name="dev.mardroemmar.owosmp">
-      <AppenderRef ref="SysOut"/>
-    </Logger>
+    <Logger level="DEBUG" name="dev.mardroemmar.owosmp"/>
+    <Logger level="debug" name="mixin"/>
+    <Logger level="debug" name="org.spongepowered.asm.mixin"/>
   </Loggers>
 </Configuration>

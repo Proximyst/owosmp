@@ -14,17 +14,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(GameRuleCommand.class)
 abstract class GameRuleCommandMixin {
+  // The generics here are a bit weird, but they're elided, so not a huge deal.
+  @SuppressWarnings({"rawtypes", "unchecked"})
   @Inject(
       method = "setRule",
       at =
           @At(
               value = "INVOKE",
+              shift = At.Shift.AFTER,
               target =
-                  "Lnet/minecraft/world/level/gamerules/GameRule;getCommandResult(Ljava/lang/Object;)I"))
-  private static void invokeUpdateCallbacks(
+                  "Lnet/minecraft/commands/CommandSourceStack;sendSuccess(Ljava/util/function/Supplier;Z)V"))
+  private static void onGameRuleUpdate(
       @NotNull CommandContext<CommandSourceStack> context,
-      // The generics here are a bit weird, but they're elided, so not a huge deal.
-      @NotNull GameRule<? super Object> gameRule,
+      @NotNull GameRule gameRule,
       @NotNull CallbackInfoReturnable<Integer> cir,
       @Local(name = "value") @NotNull Object value) {
     var callback = GameRules.getUpdateCallback(gameRule.getIdentifier());
