@@ -34,8 +34,6 @@ import org.slf4j.LoggerFactory;
 
 public class LlmSession implements Closeable {
   private static final @NotNull Logger LOGGER = LoggerFactory.getLogger(LlmSession.class);
-  public static final @NotNull String DEFAULT_TRIGGER = "ai";
-  public static final @NotNull String DEFAULT_MODEL = "mistralai/mistral-nemo";
 
   /** Pattern that matches emojis and keycap sequences. */
   private static final @NotNull Pattern EMOJIS_PATTERN =
@@ -45,9 +43,9 @@ public class LlmSession implements Closeable {
   private final @NotNull ModelPricing modelPricing = new ModelPricing();
   private final @NotNull ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
   private final @NotNull List<ChatEvent> chatEvents = new CopyOnWriteArrayList<>();
+  private final @NotNull OpenAIClient client;
 
   private volatile @NotNull LlmConfig config;
-  private final @NotNull OpenAIClient client;
   private volatile boolean closed;
 
   public LlmSession(@NotNull LlmConfig config) {
