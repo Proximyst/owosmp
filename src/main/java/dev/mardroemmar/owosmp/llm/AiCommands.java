@@ -11,6 +11,7 @@ import dev.mardroemmar.owosmp.config.ConfigHelper;
 import dev.mardroemmar.owosmp.config.ImmutableLlmConfig;
 import dev.mardroemmar.owosmp.config.ImmutableOwoSmpConfig;
 import dev.mardroemmar.owosmp.config.LlmConfig;
+import dev.mardroemmar.owosmp.config.OwoSmpConfig;
 import dev.mardroemmar.owosmp.immutable.KeepAnnotations;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -20,10 +21,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,29 +45,8 @@ import org.slf4j.LoggerFactory;
 @Gson.TypeAdapters
 @Value.Immutable
 interface KeyStatusResponse {
-  @Nullable
+  @NotNull
   StatusData data();
-
-  @Nullable
-  @SerializedName("limit_remaining")
-  BigDecimal limitRemaining();
-
-  @Nullable
-  BigDecimal limit();
-
-  @Nullable
-  BigDecimal usage();
-
-  @Nullable
-  @SerializedName("usage_monthly")
-  BigDecimal usageMonthly();
-
-  @Nullable
-  @SerializedName("usage_daily")
-  BigDecimal usageDaily();
-
-  @Nullable
-  String label();
 
   @Value.Immutable
   interface StatusData {
@@ -77,18 +57,18 @@ interface KeyStatusResponse {
     @Nullable
     BigDecimal limit();
 
-    @Nullable
+    @NotNull
     BigDecimal usage();
 
-    @Nullable
+    @NotNull
     @SerializedName("usage_monthly")
     BigDecimal usageMonthly();
 
-    @Nullable
+    @NotNull
     @SerializedName("usage_daily")
     BigDecimal usageDaily();
 
-    @Nullable
+    @NotNull
     String label();
   }
 }
@@ -107,48 +87,6 @@ public class AiCommands {
   private static @NotNull URI keyEndpoint(@NotNull String endpoint) {
     var base = endpoint.replaceAll("/+$", "").replaceFirst("/chat/completions$", "");
     return URI.create(base + "/key");
-  }
-
-  private static @NotNull String formatKeyStatus(@NotNull KeyStatusResponse.StatusData response) {
-    return formatKeyStatus(
-        response.limitRemaining(),
-        response.limit(),
-        response.usage(),
-        response.usageMonthly(),
-        response.usageDaily(),
-        response.label());
-  }
-
-  private static @NotNull String formatKeyStatus(
-      @Nullable BigDecimal limitRemaining,
-      @Nullable BigDecimal limit,
-      @Nullable BigDecimal usage,
-      @Nullable BigDecimal usageMonthly,
-      @Nullable BigDecimal usageDaily,
-      @Nullable String label) {
-    var message = new StringBuilder("OpenRouter API Key Status:\n");
-    message.append(" - Credit remaining: ").append(formatMoney(limitRemaining)).append('\n');
-    if (limit != null) {
-      message.append(" - Limit: ").append(formatMoney(limit)).append('\n');
-    }
-    if (usage != null) {
-      message.append(" - Usage: ").append(formatMoney(usage));
-      var details = new java.util.ArrayList<String>();
-      if (usageMonthly != null) {
-        details.add("monthly: " + formatMoney(usageMonthly));
-      }
-      if (usageDaily != null) {
-        details.add("daily: " + formatMoney(usageDaily));
-      }
-      if (!details.isEmpty()) {
-        message.append(" (").append(String.join(", ", details)).append(')');
-      }
-      message.append('\n');
-    }
-    if (label != null) {
-      message.append(" - Key label: ").append(label).append('\n');
-    }
-    return message.toString().stripTrailing();
   }
 
   private static @NotNull String formatMoney(@Nullable BigDecimal amount) {
@@ -191,25 +129,24 @@ public class AiCommands {
   private @NotNull LiteralArgumentBuilder<CommandSourceStack> reload() {
     return Commands.literal("reload")
         .executes(
-            context ->
-                this.perform(
-                    context.getSource(),
-                    "reload AI config",
-                    () -> {
-                      var config = ConfigHelper.reloadConfig();
-                      var llm = config.llm();
-                      if (llm == null) {
-                        this.llmHandler.close();
-                      } else {
-                        this.llmHandler.replaceSession(llm);
-                      }
-                      context
-                          .getSource()
-                          .sendSuccess(
-                              () -> Component.literal("AI config reloaded; history cleared."),
-                              true);
-                      return 1;
-                    }));
+            context -> {
+              var source = context.getSource();
+              OwoSmpConfig config;
+              try {
+                config = ConfigHelper.reloadConfig();
+              } catch (RuntimeException ex) {
+               return this.failure(source, "reload AI config", ex);
+              }
+              var llm = config.llm();
+              if (llm == null) {
+                this.llmHandler.close();
+              } else {
+                this.llmHandler.replaceSession(llm);
+              }
+              source.sendSuccess(
+                  () -> Component.literal("AI config reloaded; history cleared."), true);
+              return 1;
+            });
   }
 
   private @NotNull LiteralArgumentBuilder<CommandSourceStack> models() {
@@ -242,31 +179,23 @@ public class AiCommands {
                       if (currentLlm == null) {
                         return 0;
                       }
-                      return this.perform(
-                          context.getSource(),
-                          "add model trigger",
-                          () -> {
-                            var triggers = new HashMap<>(currentLlm.triggers());
-                            triggers.put(trigger.toLowerCase(Locale.ROOT), model);
-                            var updated =
-                                ImmutableLlmConfig.builder()
-                                    .from(currentLlm)
-                                    .triggers(Map.copyOf(triggers))
-                                    .build();
-                            this.saveLlmConfig(updated);
-                            context
-                                .getSource()
-                                .sendSuccess(
-                                    () ->
-                                        Component.literal(
-                                            "Added AI trigger '"
-                                                + trigger
-                                                + "' -> '"
-                                                + model
-                                                + "'."),
-                                    true);
-                            return 1;
-                          });
+                      var triggers = new HashMap<>(currentLlm.triggers());
+                      triggers.put(trigger.toLowerCase(Locale.ROOT), model);
+                      var updated =
+                          ImmutableLlmConfig.builder()
+                              .from(currentLlm)
+                              .triggers(Collections.unmodifiableMap(triggers))
+                              .build();
+                      var source = context.getSource();
+                      if (!this.saveLlmConfig(source, "add model trigger", updated)) {
+                        return 0;
+                      }
+                      source.sendSuccess(
+                          () ->
+                              Component.literal(
+                                  "Added AI trigger '" + trigger + "' -> '" + model + "'."),
+                          true);
+                      return 1;
                     })));
   }
 
@@ -287,41 +216,33 @@ public class AiCommands {
                       if (currentLlm == null) {
                         return 0;
                       }
-                      return this.perform(
-                          context.getSource(),
-                          "remove model trigger",
-                          () -> {
-                            var triggers = new HashMap<>(currentLlm.triggers());
-                            if (!triggers.containsKey(trigger)) {
-                              context
-                                  .getSource()
-                                  .sendFailure(
-                                      Component.literal(
-                                          "Trigger '" + trigger + "' is not configured."));
-                              return 0;
-                            }
-                            if (triggers.size() <= 1) {
-                              context
-                                  .getSource()
-                                  .sendFailure(
-                                      Component.literal("Cannot remove the last trigger."));
-                              return 0;
-                            }
-                            triggers.remove(trigger);
-                            var updated =
-                                ImmutableLlmConfig.builder()
-                                    .from(currentLlm)
-                                    .triggers(Map.copyOf(triggers))
-                                    .build();
-                            this.saveLlmConfig(updated);
-                            context
-                                .getSource()
-                                .sendSuccess(
-                                    () ->
-                                        Component.literal("Removed AI trigger '" + trigger + "'."),
-                                    true);
-                            return 1;
-                          });
+                      var triggers = new HashMap<>(currentLlm.triggers());
+                      if (!triggers.containsKey(trigger)) {
+                        context
+                            .getSource()
+                            .sendFailure(
+                                Component.literal("Trigger '" + trigger + "' is not configured."));
+                        return 0;
+                      }
+                      if (triggers.size() <= 1) {
+                        context
+                            .getSource()
+                            .sendFailure(Component.literal("Cannot remove the last trigger."));
+                        return 0;
+                      }
+                      triggers.remove(trigger);
+                      var updated =
+                          ImmutableLlmConfig.builder()
+                              .from(currentLlm)
+                              .triggers(Collections.unmodifiableMap(triggers))
+                              .build();
+                      var source = context.getSource();
+                      if (!this.saveLlmConfig(source, "remove model trigger", updated)) {
+                        return 0;
+                      }
+                      source.sendSuccess(
+                          () -> Component.literal("Removed AI trigger '" + trigger + "'."), true);
+                      return 1;
                     }));
   }
 
@@ -342,69 +263,14 @@ public class AiCommands {
 
               var endpoint = keyEndpoint(llm.endpoint());
               source.sendSuccess(() -> Component.literal("Checking OpenRouter balance..."), false);
-              EXECUTOR.execute(
-                  () -> {
-                    try {
-                      var client =
-                          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-                      var request =
-                          HttpRequest.newBuilder(endpoint)
-                              .header("Authorization", "Bearer " + token)
-                              .header("Accept", "application/json")
-                              .timeout(llm.keyRequestTimeout())
-                              .GET()
-                              .build();
-                      var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                      if (response.statusCode() != 200) {
-                        source
-                            .getServer()
-                            .execute(
-                                () ->
-                                    source.sendFailure(
-                                        Component.literal(
-                                            "OpenRouter API returned HTTP "
-                                                + response.statusCode()
-                                                + ": "
-                                                + response.body())));
-                        return;
-                      }
-
-                      var responseData =
-                          GsonHolder.gson()
-                              .fromJson(response.body(), new TypeToken<KeyStatusResponse>() {});
-                      if (responseData == null) {
-                        throw new IllegalStateException(
-                            "OpenRouter returned an empty key status response.");
-                      }
-                      var message =
-                          responseData.data() == null
-                              ? formatKeyStatus(
-                                  responseData.limitRemaining(),
-                                  responseData.limit(),
-                                  responseData.usage(),
-                                  responseData.usageMonthly(),
-                                  responseData.usageDaily(),
-                                  responseData.label())
-                              : formatKeyStatus(responseData.data());
-                      source
-                          .getServer()
-                          .execute(
-                              () -> source.sendSuccess(() -> Component.literal(message), false));
-                    } catch (IOException | InterruptedException | RuntimeException ex) {
-                      if (ex instanceof InterruptedException) {
-                        Thread.currentThread().interrupt();
-                      }
-                      LOGGER.error("Failed to query OpenRouter key balance", ex);
-                      source
-                          .getServer()
-                          .execute(
-                              () ->
-                                  source.sendFailure(
-                                      Component.literal(
-                                          "Failed to query OpenRouter balance: "
-                                              + ex.getMessage())));
-                    }
-                  });
+              var request =
+                  HttpRequest.newBuilder(endpoint)
+                      .header("Authorization", "Bearer " + token)
+                      .header("Accept", "application/json")
+                      .timeout(llm.keyRequestTimeout())
+                      .GET()
+                      .build();
+              EXECUTOR.execute(() -> this.queryKeyStatus(source, request));
               return 1;
             });
   }
@@ -454,35 +320,34 @@ public class AiCommands {
               if (currentLlm == null) {
                 return 0;
               }
-              return this.perform(
-                  context.getSource(),
+              var banned = new HashSet<>(currentLlm.bannedPlayers());
+              int changed = 0;
+              for (var player : players) {
+                if (ban ? banned.add(player.id()) : banned.remove(player.id())) {
+                  changed++;
+                }
+              }
+              var updated =
+                  ImmutableLlmConfig.builder()
+                      .from(currentLlm)
+                      .bannedPlayers(Collections.unmodifiableSet(banned))
+                      .build();
+              var source = context.getSource();
+              if (!this.saveLlmConfig(
+                  source,
                   ban ? "ban players from AI chat" : "unban players from AI chat",
-                  () -> {
-                    var banned = new HashSet<>(currentLlm.bannedPlayers());
-                    int changed = 0;
-                    for (var player : players) {
-                      if (ban ? banned.add(player.id()) : banned.remove(player.id())) {
-                        changed++;
-                      }
-                    }
-                    var updated =
-                        ImmutableLlmConfig.builder()
-                            .from(currentLlm)
-                            .bannedPlayers(Set.copyOf(banned))
-                            .build();
-                    this.saveLlmConfig(updated);
-                    var changedPlayers = changed;
-                    context
-                        .getSource()
-                        .sendSuccess(
-                            () ->
-                                Component.literal(
-                                    (ban ? "Banned " : "Unbanned ")
-                                        + changedPlayers
-                                        + " player(s) from AI chat."),
-                            true);
-                    return changed;
-                  });
+                  updated)) {
+                return 0;
+              }
+              var changedPlayers = changed;
+              source.sendSuccess(
+                  () ->
+                      Component.literal(
+                          (ban ? "Banned " : "Unbanned ")
+                              + changedPlayers
+                              + " player(s) from AI chat."),
+                  true);
+              return changed;
             });
   }
 
@@ -518,27 +383,85 @@ public class AiCommands {
     return llm == null ? Set.of() : llm.triggers().keySet();
   }
 
-  private void saveLlmConfig(@NotNull LlmConfig llm) throws IOException {
+  private boolean saveLlmConfig(
+      @NotNull CommandSourceStack source, @NotNull String action, @NotNull LlmConfig llm) {
     var config = ImmutableOwoSmpConfig.builder().from(ConfigHelper.getConfig()).llm(llm).build();
-    ConfigHelper.writeConfig(config);
+    try {
+      ConfigHelper.writeConfig(config);
+    } catch (IOException ex) {
+      this.failure(source, action, ex);
+      return false;
+    }
     this.llmHandler.updateConfig(llm);
+    return true;
   }
 
-  private int perform(
-      @NotNull CommandSourceStack source, @NotNull String action, @NotNull IntOperation operation) {
-    try {
-      return operation.run();
-    } catch (IOException
-        | com.google.gson.JsonParseException
-        | IllegalArgumentException
-        | IllegalStateException ex) {
-      return this.failure(source, action, ex);
-    } catch (RuntimeException ex) {
-      if (ex.getCause() instanceof IOException) {
-        return this.failure(source, action, ex);
-      }
-      throw ex;
+  private void queryKeyStatus(@NotNull CommandSourceStack source, @NotNull HttpRequest request) {
+    var response = this.sendKeyStatusRequest(source, request);
+    if (response == null) {
+      return;
     }
+    if (response.statusCode() != 200) {
+      source
+          .getServer()
+          .execute(
+              () ->
+                  source.sendFailure(
+                      Component.literal(
+                          "OpenRouter API returned HTTP "
+                              + response.statusCode()
+                              + ": "
+                              + response.body())));
+      return;
+    }
+
+    var responseData = this.parseKeyStatus(source, response.body());
+    if (responseData == null) {
+      return;
+    }
+    var data = responseData.data();
+    var message =
+        Component.literal("OpenRouter API Key Status:\n")
+            .append(" - Key label: " + data.label() + "\n")
+            .append(" - Credit remaining: " + formatMoney(data.limitRemaining()) + "\n")
+    if (data.limit() != null) {
+      message.append(" - Limit: " + formatMoney(data.limit()) + "\n");
+    }
+    message.append(" - Usage: " + formatMoney(data.usage()) + "\n")
+        .append(" - Usage (monthly): " + formatMoney(data.usageMonthly()) + "\n")
+        .append(" - Usage (daily): " + formatMoney(data.usageDaily()) + "\n");
+    source.getServer().execute(() -> source.sendSuccess(() -> message, false));
+  }
+
+  private @Nullable HttpResponse<String> sendKeyStatusRequest(
+      @NotNull CommandSourceStack source, @NotNull HttpRequest request) {
+    try {
+      var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+      return client.send(request, HttpResponse.BodyHandlers.ofString());
+    } catch (IOException ex) {
+      this.asyncFailure(source, ex);
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      this.asyncFailure(source, ex);
+    }
+    return null;
+  }
+
+  private @Nullable KeyStatusResponse parseKeyStatus(
+      @NotNull CommandSourceStack source, @NotNull String body) {
+    KeyStatusResponse response;
+    try {
+      response = GsonHolder.gson().fromJson(body, new TypeToken<KeyStatusResponse>() {});
+    } catch (com.google.gson.JsonParseException | IllegalStateException ex) {
+      this.asyncFailure(source, ex);
+      return null;
+    }
+    if (response == null) {
+      this.asyncFailure(
+          source, new IllegalStateException("OpenRouter returned an empty key status response."));
+      return null;
+    }
+    return response;
   }
 
   private int failure(
@@ -549,8 +472,14 @@ public class AiCommands {
     return 0;
   }
 
-  @FunctionalInterface
-  private interface IntOperation {
-    int run() throws IOException;
+  private void asyncFailure(@NotNull CommandSourceStack source, @NotNull Exception error) {
+    LOGGER.error("Failed to query OpenRouter key balance", error);
+    source
+        .getServer()
+        .execute(
+            () ->
+                source.sendFailure(
+                    Component.literal(
+                        "Failed to query OpenRouter balance: " + error.getMessage())));
   }
 }
