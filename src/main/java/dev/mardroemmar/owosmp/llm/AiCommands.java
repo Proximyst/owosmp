@@ -25,7 +25,8 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -94,6 +95,9 @@ interface KeyStatusResponse {
 
 public class AiCommands {
   private static final @NotNull Logger LOGGER = LoggerFactory.getLogger(AiCommands.class);
+  private static final @NotNull ExecutorService EXECUTOR =
+      Executors.newVirtualThreadPerTaskExecutor();
+
   private final @NotNull LlmHandler llmHandler;
 
   public AiCommands(@NotNull LlmHandler llmHandler) {
@@ -338,7 +342,7 @@ public class AiCommands {
 
               var endpoint = keyEndpoint(llm.endpoint());
               source.sendSuccess(() -> Component.literal("Checking OpenRouter balance..."), false);
-              CompletableFuture.runAsync(
+              EXECUTOR.execute(
                   () -> {
                     try {
                       var client =
