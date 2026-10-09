@@ -4,7 +4,7 @@
   "version": "${version}",
   "name": "owo SMP",
   "description": "mod for owo smp",
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
     "main": [
       "dev.mardroemmar.owosmp.OwoSmp"
@@ -13,7 +13,8 @@
   "mixins": [
     "dragonegg.mixins.json",
     "minecarts.mixins.json",
-    "gamerule.mixins.json"
+    "gamerule.mixins.json",
+    "griefing.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.19.5",
