@@ -218,6 +218,15 @@ public class GameRules {
           .category(GameRuleCategory.MISC)
           .buildAndRegister(id("global_villager_cure_reputation"));
 
+  public static final GameRule<Boolean> PERSONAL_KEEP_INVENTORY =
+      GameRuleBuilder.forBoolean(false)
+          .category(GameRuleCategory.MISC)
+          .buildAndRegister(id("personal_keep_inventory"));
+  public static final GameRule<Boolean> PERSONAL_PVP =
+      GameRuleBuilder.forBoolean(false)
+          .category(GameRuleCategory.MISC)
+          .buildAndRegister(id("personal_pvp"));
+
   private static final @NotNull Map<Identifier, UpdateCallback<? super Object>> updateCallbacks =
       new HashMap<>();
 

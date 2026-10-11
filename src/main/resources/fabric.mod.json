@@ -15,7 +15,8 @@
     "minecarts.mixins.json",
     "gamerule.mixins.json",
     "griefing.mixins.json",
-    "villager.mixins.json"
+    "villager.mixins.json",
+    "personal.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.19.5",
